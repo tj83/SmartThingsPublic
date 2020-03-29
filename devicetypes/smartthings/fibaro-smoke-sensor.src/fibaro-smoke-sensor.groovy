@@ -12,7 +12,7 @@
  *
  */
 metadata {
-	definition (name: "Fibaro Smoke Sensor", namespace: "smartthings", author: "SmartThings", mnmn: "SmartThings", vid: "SmartThings-smartthings-Fibaro_Smoke_Sensor") {
+	definition (name: "Fibaro Smoke Sensor", namespace: "smartthings", author: "SmartThings", mnmn: "SmartThings", vid: "SmartThings-smartthings-Fibaro_Smoke_Sensor", ocfDeviceType: "x.com.st.d.sensor.smoke") {
 		capability "Battery" //attributes: battery
 		capability "Configuration"	//commands: configure()
 		capability "Sensor"
@@ -23,6 +23,10 @@ metadata {
 		capability "Temperature Alarm"
 
 		fingerprint mfr:"010F", prod:"0C02", model:"1002"
+		fingerprint mfr:"010F", prod:"0C02", model:"4002"
+		fingerprint mfr:"010F", prod:"0C02", model:"1003"
+		fingerprint mfr:"010F", prod:"0C02"
+		fingerprint mfr:"010F", prod:"0C02", model:"3002"
 	}
 	simulator {
 		//battery
@@ -200,7 +204,7 @@ def zwaveEvent(physicalgraph.zwave.commands.securityv1.SecurityMessageEncapsulat
 }
 
 def isFibaro() {
-	(zwaveInfo?.mfr == "010F" && zwaveInfo.prod == "0C02")
+	(zwaveInfo?.mfr?.equals("010F") && zwaveInfo?.prod?.equals("0C02"))
 }
 
 def zwaveEvent(physicalgraph.zwave.commands.securityv1.SecurityCommandsSupportedReport cmd) {
@@ -515,7 +519,7 @@ private setSecured() {
 
 private isSecured() {
     if (zwaveInfo && zwaveInfo.zw) {
-        return zwaveInfo.zw.endsWith("s")
+        return zwaveInfo.zw.contains("s")
     } else {
         return getDataValue("secured") == "true"
     }

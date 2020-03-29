@@ -14,7 +14,7 @@
  *
  */
 metadata {
-	definition (name: "Ecolink Wireless Siren", namespace: "SmartThings", author: "SmartThings", mnmn: "SmartThings", vid: "generic-siren") {
+	definition (name: "Ecolink Wireless Siren", namespace: "SmartThings", author: "SmartThings", mnmn: "SmartThings", vid: "SmartThings-smartthings-Z-Wave_Siren", ocfDeviceType: "x.com.st.d.siren") {
 		capability "Actuator"
 		capability "Health Check"
 		capability "Switch"
@@ -45,6 +45,7 @@ metadata {
 
 def installed() {
 	initialize()
+	sendEvent(name: "alarm", value: "off", isStateChange: true)
 }
 
 def updated() {
@@ -56,7 +57,7 @@ def initialize() {
 		addChildren()
 	}
 	sendEvent(name: "checkInterval", value: 2 * 60 * 60 + 2 * 60, displayed: false, data: [protocol: "zwave", hubHardwareId: device.hub.hardwareID, offlinePingable: "1"])
-	refresh()
+	response(refresh())
 }
 
 def parse(String description) {
@@ -72,8 +73,13 @@ def parse(String description) {
 	}
 }
 
-def zwaveEvent(physicalgraph.zwave.commands.basicv1.BasicReport cmd) {	
+def zwaveEvent(physicalgraph.zwave.commands.basicv1.BasicReport cmd) {
+	//When device is plugged in, it sends BasicReport with value "0" to parent endpoint.
+	//It means that parent and child devices are available, but status of child devices must be updated.
 	createEvents(cmd.value)
+	if(cmd.value == 0) {
+		sendHubCommand(addDelay(refreshChildren()))
+	}
 }
 
 def zwaveEvent(physicalgraph.zwave.commands.switchbinaryv1.SwitchBinaryReport cmd) {
@@ -90,6 +96,14 @@ def createEvents(value) {
 }
 
 def zwaveEvent(physicalgraph.zwave.commands.multichannelv3.MultiChannelCmdEncap cmd) {
+	if (cmd.commandClass == 0x6C && cmd.parameter.size >= 4) { // Supervision encapsulated Message
+		// Supervision header is 4 bytes long, two bytes dropped here are the latter two bytes of the supervision header
+		cmd.parameter = cmd.parameter.drop(2)
+		// Updated Command Class/Command now with the remaining bytes
+		cmd.commandClass = cmd.parameter[0]
+		cmd.command = cmd.parameter[1]
+		cmd.parameter = cmd.parameter.drop(2)
+	}
 	def encapsulatedCommand = cmd.encapsulatedCommand()
 	def srcEndpoint = cmd.sourceEndPoint
 	def destEnd = cmd.destinationEndPoint
@@ -135,12 +149,22 @@ def ping() {
 }
 
 def refresh() {
-	def cmds = []	
+	def cmds = []
+	cmds << refreshChildren()
+	cmds << basicGetCmd(1)
+	return addDelay(cmds)
+}
+
+def refreshChildren() {
+	def cmds = []
 	endPoints.each {
 		cmds << basicGetCmd(it)
 	}
-	cmds << basicGetCmd(1)
-	return delayBetween(cmds, 200)
+	return cmds
+}
+
+def addDelay(cmds) {
+	delayBetween(cmds, 200)
 }
 
 def setSirenChildrenOff() {
@@ -157,9 +181,8 @@ def addChildren() {
 	endPoints.each {
 		String childDni = "${device.deviceNetworkId}-ep$it"
 		String componentLabel =	 "$device.displayName $it"
-		String ch = "ch$it"
 		
-		addChildDevice("Z-Wave Binary Switch Endpoint Siren", childDni, device.hub.id,[completedSetup: true, label: componentLabel, isComponent: false, componentName: ch, componentLabel: componentLabel])
+		addChildDevice("Z-Wave Binary Switch Endpoint Siren", childDni, device.hub.id,[completedSetup: true, label: componentLabel, isComponent: false])
 	}
 }
 
